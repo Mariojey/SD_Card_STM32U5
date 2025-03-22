@@ -48,7 +48,7 @@ RTC_HandleTypeDef hrtc;
 
 SPI_HandleTypeDef hspi2;
 
-UART_HandleTypeDef huart3;
+UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 char RTCBuffer [100];
@@ -61,7 +61,7 @@ static void SystemPower_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_RTC_Init(void);
-static void MX_USART3_UART_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -80,7 +80,9 @@ void myprintf(const char * fmt, ...){
 
 	va_end(args);
 
-	HAL_UART_Transmit(&huart3, (uint8_t*)buffer, strlen(buffer), -1);
+//	int len = strlen(buffer);
+
+	HAL_UART_Transmit(&huart1, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
 }
 
 /* USER CODE END 0 */
@@ -119,54 +121,96 @@ int main(void)
   MX_GPIO_Init();
   MX_SPI2_Init();
   MX_RTC_Init();
-  MX_USART3_UART_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
-
+  // Useful in RTC spike code
   RTC_TimeTypeDef sTime;
   RTC_DateTypeDef sDate;
 
+//  HAL_UART_Transmit(&huart1, (uint8_t *)"Hello World\r\n", 20, HAL_MAX_DELAY);
 
-  HAL_Delay(1000);
+  //Spike code of getting current time from embeded RTC
 
-  FATFS FATFileSystem;
-  FIL file;
-  FRESULT fileResult;
 
-  fileResult = f_mount(&FATFileSystem, "",1);
+  //FATFs variables
+    FATFS FATFileSystem;
+    FIL file;
+    FRESULT fileResult;
 
-  if(fileResult != FR_OK){
+    //File system initialization
+    fileResult = f_mount(&FATFileSystem, "",1);
 
-	  myprintf("Error during file mount (%i)\r\n", fileResult);
+    if(fileResult != FR_OK){
 
-	  while(1);
-  }
+  	  myprintf("Error during file mount (%i)\r\n", fileResult);
 
-  BYTE readBuffor[30];
+  	  while(1);
+    }
 
-  //Saving string to file
-  fileResult = f_open(&file, "output.txt", FA_WRITE | FA_OPEN_ALWAYS | FA_CREATE_ALWAYS);
-  if(fileResult == FR_OK){
-	  myprintf("File opened successfully \r\n");
-  }else{
-	  myprintf("Error during opening output file \r\n", fileResult);
-  }
+    DWORD free_clusters, free_sectors, total_sectors;
 
-  strncpy((char*)readBuffor, "Hello", 10);
+    FATFS* getFreeFs;
 
-  UINT bytesWrote;
+    fileResult = f_getfree("", &free_clusters, &getFreeFs);
 
-  fileResult = f_write(&file, readBuffor, 10, &bytesWrote);
+    if (fileResult != FR_OK){
+  	  myprintf("f_getfree error (%i)\r\n", fileResult);
+  	  while(1);
+    }
 
-  if(fileResult == FR_OK){
-	  myprintf("Wrote %i bytes to output file \r\n", bytesWrote);
-  }else{
-	  myprintf("Error during writing data to output file \r\n");
-  }
+    total_sectors = (getFreeFs->n_fatent - 2) * getFreeFs->csize;
+    free_sectors = free_clusters * getFreeFs->csize;
 
-  f_close(&file);
+    myprintf("SD card stats:\r\n%10lu KiB total drive space.\r\n%10lu KiB available.\r\n", total_sectors / 2, free_sectors / 2);
 
-  f_mount(NULL, "", 0);
+    fileResult = f_open(&file, "test.txt", FA_READ);
+    if(fileResult != FR_OK){
+  	  myprintf("f_open error (%i)\r\n", fileResult);
+  	  while(1);
+    }
+
+    myprintf("I was able to open \r\n");
+
+    BYTE readBuffor[30];
+
+    //Read
+  //  TCHAR* rres = f_gets((TCHAR*)readBuffor, 30, &file);
+  //  if(rres != 0){
+  //	  myprintf("Read string from test.txt,", readBuffor);
+  //  }else{
+  //	  myprintf("g_gets error \r\n", fileResult);
+  //  }
+
+    //close
+    f_close(&file);
+
+    //Open and write string to file
+    fileResult = f_open(&file, "write.txt", FA_WRITE | FA_OPEN_ALWAYS | FA_CREATE_ALWAYS);
+    if(fileResult == FR_OK){
+  	  myprintf("File opened successfully \r\n");
+    }else{
+  	  myprintf("Error during opening output file \r\n", fileResult);
+    }
+
+    strncpy((char*)readBuffor, "Hello", 5);
+
+    UINT bytesWrote;
+
+    fileResult = f_write(&file, readBuffor, 5, &bytesWrote);
+
+    if(fileResult == FR_OK){
+  	  myprintf("Wrote %i bytes to output file \r\n", bytesWrote);
+    }else{
+  	  myprintf("Error during writing data to output file \r\n");
+    }
+
+
+  //  Free
+    f_close(&file);
+
+    f_mount(NULL, "", 0);
+
 
   /* USER CODE END 2 */
 
@@ -177,14 +221,20 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+//	  HAL_UART_Transmit(&huart1, (uint8_t *)"Hello World\r\n", 20, HAL_MAX_DELAY);
 	  HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-	  HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 
-	  snprintf(RTCBuffer, sizeof(RTCBuffer), "Time:%02d:%02d, Date: %02d:%02d:02d\r\n", sTime.Hours,sTime.Minutes,sTime.Seconds,sDate.Date, sDate.Month, sDate.Year + 2000);
+	   HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 
-	  HAL_UART_Transmit(&huart3, (uint8_t*)RTCBuffer, strlen(RTCBuffer), HAL_MAX_DELAY);
+	   snprintf(RTCBuffer, sizeof(RTCBuffer), "Time:%02d:%02d:%02d\r\n",
+	  		 sTime.Hours,
+	  		 sTime.Minutes,
+	  		 sTime.Seconds
+	  		 );
 
-	  HAL_Delay(1000);
+	   HAL_UART_Transmit(&huart1, (uint8_t*)RTCBuffer, strlen(RTCBuffer), HAL_MAX_DELAY);
+	   HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }
@@ -305,8 +355,8 @@ static void MX_RTC_Init(void)
 
   /** Initialize RTC and set the Time and Date
   */
-  sTime.Hours = 21;
-  sTime.Minutes = 16;
+  sTime.Hours = 20;
+  sTime.Minutes = 18;
   sTime.Seconds = 0;
   sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   sTime.StoreOperation = RTC_STOREOPERATION_RESET;
@@ -316,7 +366,7 @@ static void MX_RTC_Init(void)
   }
   sDate.WeekDay = RTC_WEEKDAY_SATURDAY;
   sDate.Month = RTC_MONTH_MARCH;
-  sDate.Date = 15;
+  sDate.Date = 22;
   sDate.Year = 25;
 
   if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
@@ -387,50 +437,50 @@ static void MX_SPI2_Init(void)
 }
 
 /**
-  * @brief USART3 Initialization Function
+  * @brief USART1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_USART3_UART_Init(void)
+static void MX_USART1_UART_Init(void)
 {
 
-  /* USER CODE BEGIN USART3_Init 0 */
+  /* USER CODE BEGIN USART1_Init 0 */
 
-  /* USER CODE END USART3_Init 0 */
+  /* USER CODE END USART1_Init 0 */
 
-  /* USER CODE BEGIN USART3_Init 1 */
+  /* USER CODE BEGIN USART1_Init 1 */
 
-  /* USER CODE END USART3_Init 1 */
-  huart3.Instance = USART3;
-  huart3.Init.BaudRate = 115200;
-  huart3.Init.WordLength = UART_WORDLENGTH_8B;
-  huart3.Init.StopBits = UART_STOPBITS_1;
-  huart3.Init.Parity = UART_PARITY_NONE;
-  huart3.Init.Mode = UART_MODE_TX_RX;
-  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart3.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart3.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-  huart3.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart3) != HAL_OK)
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_UARTEx_SetTxFifoThreshold(&huart3, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+  if (HAL_UARTEx_SetTxFifoThreshold(&huart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_UARTEx_SetRxFifoThreshold(&huart3, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+  if (HAL_UARTEx_SetRxFifoThreshold(&huart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_UARTEx_DisableFifoMode(&huart3) != HAL_OK)
+  if (HAL_UARTEx_DisableFifoMode(&huart1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART3_Init 2 */
+  /* USER CODE BEGIN USART1_Init 2 */
 
-  /* USER CODE END USART3_Init 2 */
+  /* USER CODE END USART1_Init 2 */
 
 }
 
@@ -451,14 +501,22 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, SD_CS_Pin|LD2_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : SD_CS_Pin */
-  GPIO_InitStruct.Pin = SD_CS_Pin;
+  /*Configure GPIO pins : PA2 PA3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF8_LPUART1;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : SD_CS_Pin LD2_Pin */
+  GPIO_InitStruct.Pin = SD_CS_Pin|LD2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SD_CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
