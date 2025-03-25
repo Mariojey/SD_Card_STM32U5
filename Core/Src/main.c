@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "app_filex.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -25,6 +26,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+
+#include "stm32u5xx_hal.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -68,6 +71,8 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
 void myprintf(const char * fmt, ...){
 
 	static char buffer[256];
@@ -83,6 +88,40 @@ void myprintf(const char * fmt, ...){
 //	int len = strlen(buffer);
 
 	HAL_UART_Transmit(&huart1, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
+}
+
+void SPI2_Init(void){
+	__HAL_RCC_SPI2_CLK_ENABLE();
+
+	hspi2.Instance = SPI2;
+	hspi2.Init.Mode = SPI_MODE_MASTER;           // Tryb master
+	hspi2.Init.Direction = SPI_DIRECTION_2LINES; // Kierunek danych
+	hspi2.Init.DataSize = SPI_DATASIZE_8BIT;     // Rozmiar danych
+    hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;   // Polaryzacja zegara
+    hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;       // Fazowanie zegara
+    hspi2.Init.NSS = SPI_NSS_SOFT;               // Zarządzanie NSS
+    hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128; // Preskaler zegara
+    hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;      // Pierwszy bit
+    hspi2.Init.TIMode = SPI_TIMODE_DISABLE;      // Tryb TI wyłączony
+    hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE; // CRC wyłączone
+    hspi2.Init.CRCPolynomial = 7;                // Wartość CRC
+
+    if(HAL_SPI_Init(&hspi2) != HAL_OK){
+    	myprintf("Error with initialization");
+    	while(1){}
+
+    }else{
+    	myprintf("Initialization - OK \r\n");
+    }
+}
+
+uint8_t SPI2_ISReady(void){
+	if (__HAL_SPI_GET_FLAG(&hspi2, SPI_FLAG_TXP) &&
+	    __HAL_SPI_GET_FLAG(&hspi2, SPI_FLAG_RXP) &&
+	    !__HAL_SPI_GET_FLAG(&hspi2, SPI_FLAG_EOT)) {
+	    return 1;  // SPI2 gotowe
+	}
+	return 0;
 }
 
 /* USER CODE END 0 */
@@ -122,6 +161,7 @@ int main(void)
   MX_SPI2_Init();
   MX_RTC_Init();
   MX_USART1_UART_Init();
+  MX_FileX_Init();
   /* USER CODE BEGIN 2 */
 
   // Useful in RTC spike code
@@ -221,6 +261,12 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	  if(SPI2_ISReady()){
+		  myprintf("SPI2 is ready!");
+	  }else{
+		  myprintf("SPI2 is not ready!");
+	  }
 
 //	  HAL_UART_Transmit(&huart1, (uint8_t *)"Hello World\r\n", 20, HAL_MAX_DELAY);
 	  HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
@@ -355,8 +401,8 @@ static void MX_RTC_Init(void)
 
   /** Initialize RTC and set the Time and Date
   */
-  sTime.Hours = 20;
-  sTime.Minutes = 18;
+  sTime.Hours = 0;
+  sTime.Minutes = 51;
   sTime.Seconds = 0;
   sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   sTime.StoreOperation = RTC_STOREOPERATION_RESET;
@@ -364,9 +410,9 @@ static void MX_RTC_Init(void)
   {
     Error_Handler();
   }
-  sDate.WeekDay = RTC_WEEKDAY_SATURDAY;
+  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
   sDate.Month = RTC_MONTH_MARCH;
-  sDate.Date = 22;
+  sDate.Date = 24;
   sDate.Year = 25;
 
   if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
@@ -400,7 +446,7 @@ static void MX_SPI2_Init(void)
   hspi2.Instance = SPI2;
   hspi2.Init.Mode = SPI_MODE_MASTER;
   hspi2.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi2.Init.DataSize = SPI_DATASIZE_4BIT;
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
